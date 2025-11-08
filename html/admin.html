@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Админ панель — STUCK</title>
+  <link rel="stylesheet" href="../css/style.css"/>
+</head>
+<body>
+<header>
+  <!-- Header будет загружен динамически через JavaScript -->
+</header>
+
+<main>
+  <div class="admin-container">
+    <div class="welcome-message">
+      <h1>Админ панель STUCK</h1>
+      <p>Добро пожаловать, <span id="adminName">Администратор</span>!</p>
+    </div>
+    
+    <div class="stats-grid">
+      <div class="stat-card">
+        <h3 id="totalUsers">0</h3>
+        <p>Пользователей</p>
+      </div>
+      <div class="stat-card">
+        <h3 id="totalGames">0</h3>
+        <p>Игр в каталоге</p>
+      </div>
+      <div class="stat-card">
+        <h3 id="totalAdmins">0</h3>
+        <p>Администраторов</p>
+      </div>
+    </div>
+
+    <div class="admin-section">
+      <h2>Управление пользователями</h2>
+      <div class="crud-form">
+        <input type="email" id="newUserEmail" placeholder="Email пользователя">
+        <input type="password" id="newUserPassword" placeholder="Пароль">
+        <select id="newUserRole" style="padding: 12px; border: 1px solid #ddd; border-radius: 6px;">
+          <option value="user">Пользователь</option>
+          <option value="admin">Администратор</option>
+        </select>
+        <button id="addUserBtn" class="btn-primary">+ Добавить пользователя</button>
+      </div>
+      <table id="usersTable">
+        <thead>
+          <tr>
+            <th>Email</th>
+            <th>Роль</th>
+            <th>Действия</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="admin-section">
+  <h2>Управление играми</h2>
+  <div class="crud-form">
+    <input id="gTitle" placeholder="Название игры">
+    <input id="gPrice" type="number" placeholder="Цена (₽)">
+    <input id="gCover" placeholder="Ссылка на обложку">
+    <input id="gPage" placeholder="Страница описания">
+    <div style="grid-column: 1 / -1;">
+      <label for="gAvatarUpload" style="display: block; margin-bottom: 8px; font-weight: 500;">Загрузить аватарку:</label>
+      <input type="file" id="gAvatarUpload" accept="image/*" style="margin-bottom: 10px;">
+      <div id="avatarPreview" style="margin-top: 10px;"></div>
+    </div>
+    <button id="addGameBtn" class="btn-primary">+ Добавить игру</button>
+  </div>
+  <table id="gamesTable">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Название</th>
+        <th>Цена</th>
+        <th>Обложка</th>
+        <th>Действия</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
+  </div>
+</main>
+
+<footer>
+  <!-- Footer будет загружен динамически через JavaScript -->
+</footer>
+
+<script src="../js/bundle.js"></script>
+<script src="../js/components.js"></script>
+<script>
+  // Проверка доступа
+  const currentUser = Auth.current();
+  if (!currentUser || currentUser.role !== 'admin') {
+    alert('Доступ запрещен! Требуются права администратора.');
+    window.location.href = 'login.html';
+  }
+
+  // Отображение имени админа
+  document.getElementById('adminName').textContent = currentUser.email;
+
+  // Загрузка статистики
+  async function loadStats() {
+    const users = await DB.getUsers();
+    const games = await DB.getCatalogue();
+    const admins = users.filter(u => u.role === 'admin').length;
+    
+    document.getElementById('totalUsers').textContent = users.length;
+    document.getElementById('totalGames').textContent = games.length;
+    document.getElementById('totalAdmins').textContent = admins;
+  }
+
+  // Загрузка пользователей
+  async function loadUsers() {
+    const users = await DB.getUsers();
+    const tbody = document.querySelector('#usersTable tbody');
+    tbody.innerHTML = users.map(user => `
+      <tr>
+        <td>${user.email}</td>
+        <td>${user.role}</td>
+        <td>
+          <button class="btn-small btn-danger" onclick="deleteUser('${user.email}')">Удалить</button>
+          <button class="btn-small btn-warning" onclick="toggleRole('${user.email}')">
+            ${user.role === 'admin' ? 'Сделать пользователем' : 'Сделать админом'}
+          </button>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  // Загрузка игр
+  async function loadGames() {
+    const games = await DB.getCatalogue();
+    const tbody = document.querySelector('#gamesTable tbody');
+    tbody.innerHTML = games.map(game => `
+      <tr>
+        <td>${game.id}</td>
+        <td>${game.title}</td>
+        <td>${game.price} ₽</td>
+        <td>
+          <img src="${game.cover}" alt="${game.title}" style="width: 50px; height: 70px; object-fit: cover; cursor: pointer;" 
+               onclick="changeGameAvatar(${game.id})" title="Нажмите чтобы изменить аватарку">
+        </td>
+        <td>
+          <button class="btn-small btn-danger" onclick="deleteGame(${game.id})">Удалить</button>
+          <button class="btn-small btn-warning" onclick="editGame(${game.id})">Редактировать</button>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  // Удаление пользователя
+  window.deleteUser = async function(email) {
+    if (confirm(`Вы уверены, что хотите удалить пользователя ${email}?`)) {
+      await DB.deleteUser(email);
+      await loadUsers();
+      await loadStats();
+    }
+  };
+
+  // Переключение роли пользователя
+  window.toggleRole = async function(email) {
+    const users = await DB.getUsers();
+    const user = users.find(u => u.email === email);
+    if (user) {
+      user.role = user.role === 'admin' ? 'user' : 'admin';
+      await DB.saveUsers(users);
+      await loadUsers();
+      await loadStats();
+    }
+  };
+
+  // Удаление игры
+  window.deleteGame = async function(id) {
+    if (confirm('Вы уверены, что хотите удалить эту игру?')) {
+      await DB.deleteGame(id);
+      await loadGames();
+      await loadStats();
+    }
+  };
+
+  // Редактирование игры
+  window.editGame = async function(id) {
+    const games = await DB.getCatalogue();
+    const game = games.find(g => g.id === id);
+    if (game) {
+      const newTitle = prompt('Новое название:', game.title);
+      const newPrice = prompt('Новая цена:', game.price);
+      
+      if (newTitle && newPrice) {
+        game.title = newTitle;
+        game.price = parseInt(newPrice);
+        await DB.saveCatalogue(games);
+        await loadGames();
+      }
+    }
+  };
+
+  // Изменение аватарки игры
+  window.changeGameAvatar = async function(id) {
+    const games = await DB.getCatalogue();
+    const game = games.find(g => g.id === id);
+    if (!game) return;
+
+    const newAvatarUrl = prompt('Введите новую ссылку на аватарку:', game.cover);
+    if (newAvatarUrl && newAvatarUrl !== game.cover) {
+      game.cover = newAvatarUrl;
+      await DB.saveCatalogue(games);
+      await loadGames();
+      alert('Аватарка игры обновлена!');
+    }
+  };
+
+  // Обработка загрузки файла для новой игры (с поддержкой Supabase)
+  document.getElementById('gAvatarUpload').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    const preview = document.getElementById('avatarPreview');
+    
+    if (file) {
+      // Проверка размера файла (максимум 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Файл слишком большой! Максимальный размер 5MB.');
+        e.target.value = '';
+        return;
+      }
+      
+      // Проверка типа файла
+      if (!file.type.startsWith('image/')) {
+        alert('Пожалуйста, выберите изображение!');
+        e.target.value = '';
+        return;
+      }
+      
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        preview.innerHTML = `
+          <img src="${e.target.result}" style="max-width: 200px; max-height: 150px; border-radius: 8px;">
+          <p style="font-size: 12px; color: #666; margin-top: 5px;">Предпросмотр (файл будет загружен в Supabase)</p>
+        `;
+        // Сохраняем файл для загрузки в Supabase
+        preview.dataset.uploadFile = 'true';
+      };
+      reader.readAsDataURL(file);
+    } else {
+      preview.innerHTML = '';
+      delete preview.dataset.uploadFile;
+    }
+  });
+
+  // Добавление пользователя
+  document.getElementById('addUserBtn').onclick = async function() {
+    const email = document.getElementById('newUserEmail').value.trim();
+    const password = document.getElementById('newUserPassword').value.trim();
+    const role = document.getElementById('newUserRole').value;
+    
+    if (!email || !password) {
+      alert('Заполните все поля!');
+      return;
+    }
+    
+    try {
+      const result = await Auth.register(email, password);
+      if (result.ok) {
+        // Обновляем роль если нужно
+        const users = await DB.getUsers();
+        const user = users.find(u => u.email === email);
+        if (user && role !== 'user') {
+          user.role = role;
+          await DB.saveUsers(users);
+        }
+        
+        // Очищаем форму
+        document.getElementById('newUserEmail').value = '';
+        document.getElementById('newUserPassword').value = '';
+        document.getElementById('newUserRole').value = 'user';
+        
+        // Обновляем таблицы и статистику
+        await loadUsers();
+        await loadStats();
+        alert('Пользователь добавлен!');
+      } else {
+        alert(result.msg);
+      }
+    } catch (error) {
+      console.error('Ошибка добавления пользователя:', error);
+      alert('Произошла ошибка при добавлении пользователя');
+    }
+  };
+
+  // Добавление игры (с загрузкой в Supabase)
+  document.getElementById('addGameBtn').onclick = async function() {
+    const title = document.getElementById('gTitle').value.trim();
+    const price = parseInt(document.getElementById('gPrice').value);
+    const cover = document.getElementById('gCover').value.trim();
+    const page = document.getElementById('gPage').value.trim();
+    const avatarPreview = document.getElementById('avatarPreview');
+    const fileInput = document.getElementById('gAvatarUpload');
+    
+    if (!title || !price) {
+      alert('Заполните название и цену!');
+      return;
+    }
+    
+    let coverUrl = cover;
+    
+    // Если выбран файл для загрузки
+    if (fileInput.files.length > 0 && avatarPreview.dataset.uploadFile) {
+      try {
+        // Показываем индикатор загрузки
+        const btn = document.getElementById('addGameBtn');
+        const originalText = btn.textContent;
+        btn.textContent = 'Загрузка изображения...';
+        btn.disabled = true;
+        
+        const file = fileInput.files[0];
+        coverUrl = await SupabaseStorage.uploadFile(file, file.name);
+        
+        btn.textContent = originalText;
+        btn.disabled = false;
+      } catch (error) {
+        alert('Ошибка загрузки изображения: ' + error.message);
+        return;
+      }
+    } else if (!coverUrl) {
+      // Если нет ни ссылки, ни загруженного файла - используем placeholder
+      coverUrl = `https://via.placeholder.com/300x400/FF6B35/FFFFFF?text=${encodeURIComponent(title)}`;
+    }
+    
+    const game = {
+      title: title,
+      price: price,
+      cover: coverUrl,
+      detailPage: page || 'game-details.html',
+      genre: "Экшен, RPG",
+      developer: "Неизвестный разработчик",
+      publisher: "Неизвестный издатель",
+      releaseDate: "2024",
+      description: "Захватывающая игра с отличной графикой и геймплеем.",
+      features: ["Отличная графика", "Увлекательный геймплей", "Множество уровней"]
+    };
+    
+    DB.addGame(game);
+    
+    // Очищаем форму
+    document.getElementById('gTitle').value = '';
+    document.getElementById('gPrice').value = '';
+    document.getElementById('gCover').value = '';
+    document.getElementById('gPage').value = '';
+    document.getElementById('gAvatarUpload').value = '';
+    avatarPreview.innerHTML = '';
+    delete avatarPreview.dataset.uploadFile;
+    
+    loadGames();
+    loadStats();
+    alert('Игра добавлена!');
+  };
+
+  // Инициализация
+  loadStats();
+  loadUsers();
+  loadGames();
+
+  // Улучшенная функция изменения аватарки с модальным окном
+  window.changeGameAvatar = async function(id) {
+    const games = await DB.getCatalogue();
+    const game = games.find(g => g.id === id);
+    if (!game) return;
+
+    // Создаем модальное окно
+    const modal = document.createElement('div');
+    modal.className = 'avatar-modal';
+    modal.style.display = 'block';
+    
+    modal.innerHTML = `
+      <div class="avatar-modal-content">
+        <h3>Изменение аватарки для "${game.title}"</h3>
+        
+        <div class="avatar-options">
+          <div class="avatar-option" onclick="selectAvatarOption('url')">
+            <strong>Использовать ссылку</strong>
+            <p style="font-size: 14px; color: #666; margin: 5px 0 0 0;">Введите URL изображения</p>
+          </div>
+          
+          <div class="avatar-option" onclick="selectAvatarOption('upload')">
+            <strong>Загрузить файл</strong>
+            <p style="font-size: 14px; color: #666; margin: 5px 0 0 0;">Выберите файл с компьютера</p>
+          </div>
+        </div>
+        
+        <div id="avatarUrlSection" style="display: none;">
+          <input type="text" id="newAvatarUrl" placeholder="https://example.com/image.jpg" 
+                 value="${game.cover}" style="width: 100%; padding: 10px; margin: 10px 0;">
+        </div>
+        
+        <div id="avatarUploadSection" style="display: none;">
+          <div class="upload-area" onclick="document.getElementById('avatarFileInput').click()">
+            <div class="upload-icon">📁</div>
+            <div class="upload-text">Нажмите для выбора файла</div>
+            <div class="upload-hint">PNG, JPG до 2MB</div>
+          </div>
+          <input type="file" id="avatarFileInput" accept="image/*" style="display: none;">
+          <div id="avatarUploadPreview" style="margin: 10px 0;"></div>
+        </div>
+        
+        <div class="avatar-preview">
+          <strong>Текущая аватарка:</strong>
+          <div style="margin-top: 10px;">
+            <img src="${game.cover}" alt="Текущая аватарка" style="max-width: 150px;">
+          </div>
+        </div>
+        
+        <div class="avatar-modal-buttons">
+          <button class="btn-secondary" onclick="closeAvatarModal()">Отмена</button>
+          <button class="btn-primary" onclick="saveGameAvatar(${id})">Сохранить</button>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Обработчики для загрузки файла
+    document.getElementById('avatarFileInput').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      const preview = document.getElementById('avatarUploadPreview');
+      
+      if (file && file.size > 2 * 1024 * 1024) {
+        alert('Файл слишком большой! Максимальный размер 2MB.');
+        return;
+      }
+      
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          preview.innerHTML = `
+            <strong>Новая аватарка:</strong>
+            <div style="margin-top: 5px;">
+              <img src="${e.target.result}" style="max-width: 150px; border-radius: 4px;">
+            </div>
+          `;
+          preview.dataset.fileData = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+  };
+
+  // Функции для работы с модальным окном
+  window.selectAvatarOption = function(option) {
+    document.querySelectorAll('.avatar-option').forEach(el => el.classList.remove('selected'));
+    event.target.closest('.avatar-option').classList.add('selected');
+    
+    document.getElementById('avatarUrlSection').style.display = option === 'url' ? 'block' : 'none';
+    document.getElementById('avatarUploadSection').style.display = option === 'upload' ? 'block' : 'none';
+  };
+
+  window.closeAvatarModal = function() {
+    const modal = document.querySelector('.avatar-modal');
+    if (modal) {
+      document.body.removeChild(modal);
+    }
+  };
+
+  window.saveGameAvatar = async function(id) {
+    const games = await DB.getCatalogue();
+    const game = games.find(g => g.id === id);
+    const selectedOption = document.querySelector('.avatar-option.selected');
+    
+    if (!selectedOption) {
+      alert('Выберите способ изменения аватарки!');
+      return;
+    }
+    
+    let newAvatarUrl = game.cover;
+    
+    if (selectedOption.textContent.includes('ссылка')) {
+      const urlInput = document.getElementById('newAvatarUrl').value.trim();
+      if (!urlInput) {
+        alert('Введите ссылку на изображение!');
+        return;
+      }
+      newAvatarUrl = urlInput;
+    } else if (selectedOption.textContent.includes('файл')) {
+      const fileInput = document.getElementById('avatarFileInput');
+      if (!fileInput.files.length) {
+        alert('Загрузите файл!');
+        return;
+      }
+      
+      try {
+        // Показываем индикатор загрузки
+        const modal = document.querySelector('.avatar-modal-content');
+        const saveBtn = modal.querySelector('.btn-primary');
+        const originalText = saveBtn.textContent;
+        saveBtn.textContent = 'Загрузка в Supabase...';
+        saveBtn.disabled = true;
+        
+        const file = fileInput.files[0];
+        newAvatarUrl = await SupabaseStorage.uploadFile(file, file.name);
+        
+        saveBtn.textContent = originalText;
+        saveBtn.disabled = false;
+      } catch (error) {
+        alert('Ошибка загрузки изображения: ' + error.message);
+        return;
+      }
+    }
+    
+    if (newAvatarUrl !== game.cover) {
+      game.cover = newAvatarUrl;
+      await DB.saveCatalogue(games);
+      await loadGames();
+      alert('Аватарка игры обновлена!');
+    }
+    
+    closeAvatarModal();
+  };
+
+  // Закрытие модального окна при клике вне его
+  document.addEventListener('click', function(e) {
+    if (e.target.classList.contains('avatar-modal')) {
+      closeAvatarModal();
+    }
+  });
+
+  // ... остальной код ...
+</script>
+  
+</script>
+</body>
+</html>

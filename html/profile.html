@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Профиль — STUCK</title>
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+<header>
+  <!-- Header будет загружен динамически через JavaScript -->
+</header>
+
+<main>
+  <section class="profile-section">
+    <div class="cont">
+      <div class="profile-container">
+        <h1>Личный кабинет</h1>
+        
+        <div class="profile-info">
+          <div class="info-card">
+            <h3>Информация о пользователе</h3>
+            <p><strong>Email:</strong> <span id="userEmail"></span></p>
+            <p><strong>Роль:</strong> <span id="userRole"></span></p>
+          </div>
+          
+          <div class="info-card">
+            <h3>История заказов</h3>
+            <div id="orderHistory">
+              <p>У вас пока нет завершенных заказов</p>
+            </div>
+          </div>
+          
+          <div class="info-card">
+            <h3>Действия</h3>
+            <button id="changePasswordBtn" class="btn-secondary" style="margin-right: 10px;">
+              Сменить пароль
+            </button>
+            <button id="logoutProfileBtn" class="btn-login">
+              Выйти из аккаунта
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <!-- Footer будет загружен динамически через JavaScript -->
+</footer>
+
+<script src="../js/bundle.js"></script>
+<script src="../js/components.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const currentUser = Auth.current();
+    
+    if (!currentUser) {
+      alert('Пожалуйста, войдите в систему');
+      window.location.href = 'login.html';
+      return;
+    }
+    
+    // Заполняем информацию о пользователе
+    document.getElementById('userEmail').textContent = currentUser.email;
+    document.getElementById('userRole').textContent = currentUser.role === 'admin' ? 'Администратор' : 'Пользователь';
+    
+    // Обработчики кнопок
+    document.getElementById('logoutProfileBtn').addEventListener('click', function() {
+      Auth.logout();
+      window.location.href = 'index.html';
+    });
+    
+    document.getElementById('changePasswordBtn').addEventListener('click', function() {
+      alert('Функция смены пароля в разработке');
+    });
+  });
+</script>
+</body>
+</html>
